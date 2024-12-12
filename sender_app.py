@@ -76,7 +76,7 @@ if st.button("Encrypt and Send Message"):
             st.write("Tag:", tag.hex())
 
             # Automatically send data to the receiver app
-            receiver_url = "https://msg-ecc-rcv.streamlit.app/receive"
+            receiver_url = "https://msg-ecc-rcv.streamlit.app"
             response = requests.post(receiver_url, json={
                 "sender_public_key": sender_public_key_pem,
                 "ciphertext": ciphertext.hex(),
