@@ -1,12 +1,9 @@
-# receiver_app.py
 import streamlit as st
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
-from flask import Flask, request, jsonify
-from threading import Thread
 
 # Helper functions
 def aes_decrypt(key, iv, ciphertext, tag):
@@ -44,36 +41,6 @@ def decrypt_message(receiver_private_key, sender_public_key, iv, ciphertext, tag
     plaintext = aes_decrypt(symmetric_key, iv, ciphertext, tag)
     return plaintext
 
-# Flask app to receive data
-app = Flask(__name__)
-data_store = {
-    "sender_public_key": None,
-    "ciphertext": None,
-    "iv": None,
-    "tag": None
-}
-
-@app.route('/receive', methods=['POST'])
-def receive_data():
-    data = request.json
-    data_store["sender_public_key"] = data.get("sender_public_key")
-    data_store["ciphertext"] = data.get("ciphertext")
-    data_store["iv"] = data.get("iv")
-    data_store["tag"] = data.get("tag")
-
-    if None in data_store.values():
-        return jsonify({"error": "Invalid data received."}), 400
-
-    return jsonify({"message": "Data received successfully."}), 200
-
-def run_flask():
-    app.run(debug=False, host="0.0.0.0", port=5000)
-
-# Start Flask server in a separate thread
-flask_thread = Thread(target=run_flask)
-flask_thread.daemon = True
-flask_thread.start()
-
 # Streamlit Receiver App
 st.title("ECC Receiver Application")
 
@@ -86,26 +53,37 @@ st.subheader("Your Public Key (Share this with the Sender):")
 receiver_public_key_pem = serialize_public_key(st.session_state.receiver_public_key).decode()
 st.text_area("Receiver Public Key", receiver_public_key_pem, height=200)
 
-# Check if data is available in the store
-if all(data_store.values()):
-    st.subheader("Received Encrypted Data")
-    st.write("Sender's Public Key:")
-    st.text_area("", data_store["sender_public_key"], height=200)
+# Tabs for manual and automatic decryption
+manual_tab, automatic_tab = st.tabs(["Manual Decryption", "Automatic Decryption"])
+
+with manual_tab:
+    st.subheader("Manual Decryption")
+    sender_public_key_pem = st.text_area("Sender's Public Key (PEM format)")
+    iv_hex = st.text_input("IV (Hex)")
+    ciphertext_hex = st.text_input("Ciphertext (Hex)")
+    tag_hex = st.text_input("Tag (Hex)")
 
     if st.button("Decrypt Message"):
-        try:
-            sender_public_key = deserialize_public_key(data_store["sender_public_key"].encode('utf-8'))
-            plaintext = decrypt_message(
-                st.session_state.receiver_private_key,
-                sender_public_key,
-                bytes.fromhex(data_store["iv"]),
-                bytes.fromhex(data_store["ciphertext"]),
-                bytes.fromhex(data_store["tag"])
-            )
+        if sender_public_key_pem and iv_hex and ciphertext_hex and tag_hex:
+            try:
+                sender_public_key = deserialize_public_key(sender_public_key_pem.encode('utf-8'))
+                plaintext = decrypt_message(
+                    st.session_state.receiver_private_key,
+                    sender_public_key,
+                    bytes.fromhex(iv_hex),
+                    bytes.fromhex(ciphertext_hex),
+                    bytes.fromhex(tag_hex)
+                )
+                st.success(f"Decrypted Message: {plaintext.decode('utf-8')}")
+            except Exception as e:
+                st.error(f"Error: {e}")
+        else:
+            st.error("All fields are required for decryption.")
 
-            st.success("Message decrypted successfully!")
-            st.write("Decrypted Message:", plaintext.decode('utf-8'))
-        except Exception as e:
-            st.error(f"Error decrypting message: {e}")
-else:
-    st.info("Waiting for encrypted data...")
+with automatic_tab:
+    st.subheader("Automatic Decryption")
+    st.write("Decrypted messages will appear here when received.")
+
+    # Display decrypted message if available
+    if "decrypted_message" in st.session_state:
+        st.success(f"Decrypted Message: {st.session_state.decrypted_message}")
