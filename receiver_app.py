@@ -92,19 +92,20 @@ if all(data_store.values()):
     st.write("Sender's Public Key:")
     st.text_area("", data_store["sender_public_key"], height=200)
 
-    try:
-        sender_public_key = deserialize_public_key(data_store["sender_public_key"].encode('utf-8'))
-        plaintext = decrypt_message(
-            st.session_state.receiver_private_key,
-            sender_public_key,
-            bytes.fromhex(data_store["iv"]),
-            bytes.fromhex(data_store["ciphertext"]),
-            bytes.fromhex(data_store["tag"])
-        )
+    if st.button("Decrypt Message"):
+        try:
+            sender_public_key = deserialize_public_key(data_store["sender_public_key"].encode('utf-8'))
+            plaintext = decrypt_message(
+                st.session_state.receiver_private_key,
+                sender_public_key,
+                bytes.fromhex(data_store["iv"]),
+                bytes.fromhex(data_store["ciphertext"]),
+                bytes.fromhex(data_store["tag"])
+            )
 
-        st.success("Message decrypted successfully!")
-        st.write("Decrypted Message:", plaintext.decode('utf-8'))
-    except Exception as e:
-        st.error(f"Error decrypting message: {e}")
+            st.success("Message decrypted successfully!")
+            st.write("Decrypted Message:", plaintext.decode('utf-8'))
+        except Exception as e:
+            st.error(f"Error decrypting message: {e}")
 else:
     st.info("Waiting for encrypted data...")
