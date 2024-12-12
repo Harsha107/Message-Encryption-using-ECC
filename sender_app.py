@@ -1,3 +1,4 @@
+### Updated Sender App Code
 import streamlit as st
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization, hashes
@@ -69,14 +70,8 @@ if st.button("Encrypt and Send Message"):
                 st.session_state.sender_private_key, receiver_public_key, message.encode('utf-8')
             )
 
-            # Display encrypted message details
-            st.success("Message encrypted successfully!")
-            st.write("Ciphertext:", ciphertext.hex())
-            st.write("IV:", iv.hex())
-            st.write("Tag:", tag.hex())
-
             # Automatically send data to the receiver app
-            receiver_url = "https://msg-ecc-rcv.streamlit.app"
+            receiver_url = "https://msg-ecc-rcv.streamlit.app/receive"
             response = requests.post(receiver_url, json={
                 "sender_public_key": sender_public_key_pem,
                 "ciphertext": ciphertext.hex(),
