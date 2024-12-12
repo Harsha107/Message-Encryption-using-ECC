@@ -1,3 +1,4 @@
+# receiver_app.py
 import streamlit as st
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization, hashes
@@ -5,6 +6,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
 from flask import Flask, request, jsonify
+from threading import Thread
 
 # Helper functions
 def aes_decrypt(key, iv, ciphertext, tag):
@@ -42,6 +44,36 @@ def decrypt_message(receiver_private_key, sender_public_key, iv, ciphertext, tag
     plaintext = aes_decrypt(symmetric_key, iv, ciphertext, tag)
     return plaintext
 
+# Flask app to receive data
+app = Flask(__name__)
+data_store = {
+    "sender_public_key": None,
+    "ciphertext": None,
+    "iv": None,
+    "tag": None
+}
+
+@app.route('/receive', methods=['POST'])
+def receive_data():
+    data = request.json
+    data_store["sender_public_key"] = data.get("sender_public_key")
+    data_store["ciphertext"] = data.get("ciphertext")
+    data_store["iv"] = data.get("iv")
+    data_store["tag"] = data.get("tag")
+
+    if None in data_store.values():
+        return jsonify({"error": "Invalid data received."}), 400
+
+    return jsonify({"message": "Data received successfully."}), 200
+
+def run_flask():
+    app.run(debug=False, host="0.0.0.0", port=5000)
+
+# Start Flask server in a separate thread
+flask_thread = Thread(target=run_flask)
+flask_thread.daemon = True
+flask_thread.start()
+
 # Streamlit Receiver App
 st.title("ECC Receiver Application")
 
@@ -54,30 +86,25 @@ st.subheader("Your Public Key (Share this with the Sender):")
 receiver_public_key_pem = serialize_public_key(st.session_state.receiver_public_key).decode()
 st.text_area("Receiver Public Key", receiver_public_key_pem, height=200)
 
-# Flask API to receive encrypted data from the sender
-app = Flask(__name__)
-
-@app.route('/receive', methods=['POST'])
-def receive_data():
-    data = request.json
-    sender_public_key_pem = data.get("sender_public_key")
-    ciphertext_hex = data.get("ciphertext")
-    iv_hex = data.get("iv")
-    tag_hex = data.get("tag")
-
-    if not sender_public_key_pem or not ciphertext_hex or not iv_hex or not tag_hex:
-        return jsonify({"error": "Invalid data received."}), 400
+# Check if data is available in the store
+if all(data_store.values()):
+    st.subheader("Received Encrypted Data")
+    st.write("Sender's Public Key:")
+    st.text_area("", data_store["sender_public_key"], height=200)
 
     try:
-        sender_public_key = deserialize_public_key(sender_public_key_pem.encode('utf-8'))
+        sender_public_key = deserialize_public_key(data_store["sender_public_key"].encode('utf-8'))
         plaintext = decrypt_message(
             st.session_state.receiver_private_key,
             sender_public_key,
-            bytes.fromhex(iv_hex),
-            bytes.fromhex(ciphertext_hex),
-            bytes.fromhex(tag_hex)
+            bytes.fromhex(data_store["iv"]),
+            bytes.fromhex(data_store["ciphertext"]),
+            bytes.fromhex(data_store["tag"])
         )
 
-        return jsonify({"plaintext": plaintext.decode('utf-8')}), 200
+        st.success("Message decrypted successfully!")
+        st.write("Decrypted Message:", plaintext.decode('utf-8'))
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        st.error(f"Error decrypting message: {e}")
+else:
+    st.info("Waiting for encrypted data...")
