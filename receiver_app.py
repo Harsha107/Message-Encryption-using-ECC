@@ -4,59 +4,29 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
-
-def aes_decrypt(key, iv, ciphertext, tag):
-    cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag))
-    decryptor = cipher.decryptor()
-    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-    return plaintext
-
-def generate_key_pair():
-    private_key = ec.generate_private_key(ec.SECP256R1())
-    public_key = private_key.public_key()
-    return private_key, public_key
-
-def serialize_public_key(public_key):
-    return public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    )
-
-def deserialize_public_key(public_bytes):
-    return serialization.load_pem_public_key(public_bytes)
-
-def derive_shared_key(private_key, peer_public_key):
-    shared_key = private_key.exchange(ec.ECDH(), peer_public_key)
-    derived_key = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
-        info=b'encryption'
-    ).derive(shared_key)
-    return derived_key
-
-def decrypt_message(receiver_private_key, sender_public_key, iv, ciphertext, tag):
-    symmetric_key = derive_shared_key(receiver_private_key, sender_public_key)
-    plaintext = aes_decrypt(symmetric_key, iv, ciphertext, tag)
-    return plaintext
+from sender_app import generate_key_pair, serialize_public_key, deserialize_public_key, decrypt_message
 
 st.title("ECC Receiver Application")
 
+# Generate receiver's key pair
 if "receiver_private_key" not in st.session_state:
     st.session_state.receiver_private_key, st.session_state.receiver_public_key = generate_key_pair()
 
-st.subheader("Your Public Key (Share this with Sender):")
-st.text_area("Public Key", serialize_public_key(st.session_state.receiver_public_key).decode(), height=200)
+# Display receiver's public key
+st.subheader("Your Public Key (Share this with the Sender):")
+receiver_public_key_pem = serialize_public_key(st.session_state.receiver_public_key).decode()
+st.text_area("Receiver Public Key", receiver_public_key_pem, height=200)
 
-iv_hex = st.text_input("IV (Hex)")
-ciphertext_hex = st.text_area("Ciphertext (Hex)")
-tag_hex = st.text_input("Tag (Hex)")
+# Input data from sender
 sender_public_key_pem = st.text_area("Paste Sender's Public Key (PEM format)")
+ciphertext_hex = st.text_area("Ciphertext (Hex)")
+iv_hex = st.text_input("IV (Hex)")
+tag_hex = st.text_input("Tag (Hex)")
 
 if st.button("Decrypt Message"):
-    if iv_hex and ciphertext_hex and tag_hex and sender_public_key_pem:
+    if sender_public_key_pem and ciphertext_hex and iv_hex and tag_hex:
         try:
-            sender_public_key = deserialize_public_key(sender_public_key_pem.encode())
+            sender_public_key = deserialize_public_key(sender_public_key_pem.encode('utf-8'))
             plaintext = decrypt_message(
                 st.session_state.receiver_private_key,
                 sender_public_key,
@@ -66,8 +36,8 @@ if st.button("Decrypt Message"):
             )
 
             st.success("Message decrypted successfully!")
-            st.write("Decrypted Message:", plaintext.decode())
+            st.write("Decrypted Message:", plaintext.decode('utf-8'))
         except Exception as e:
             st.error(f"Error: {e}")
     else:
-        st.error("Please provide all required details.")
+        st.error("Please provide all required inputs.")
