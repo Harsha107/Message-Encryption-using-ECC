@@ -4,6 +4,7 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
+import json
 
 # Helper functions
 def aes_decrypt(key, iv, ciphertext, tag):
@@ -87,3 +88,32 @@ with automatic_tab:
     # Display decrypted message if available
     if "decrypted_message" in st.session_state:
         st.success(f"Decrypted Message: {st.session_state.decrypted_message}")
+
+# Add a /receive endpoint
+from streamlit.web import router
+from werkzeug.wrappers import Request, Response
+
+@Request.application
+def receive_endpoint(request):
+    try:
+        data = json.loads(request.data)
+        sender_public_key = deserialize_public_key(data["sender_public_key"].encode("utf-8"))
+        iv = bytes.fromhex(data["iv"])
+        ciphertext = bytes.fromhex(data["ciphertext"])
+        tag = bytes.fromhex(data["tag"])
+
+        # Decrypt message
+        plaintext = decrypt_message(
+            st.session_state.receiver_private_key,
+            sender_public_key,
+            iv,
+            ciphertext,
+            tag
+        )
+        st.session_state.decrypted_message = plaintext.decode("utf-8")
+
+        return Response("Message decrypted successfully!", status=200)
+    except Exception as e:
+        return Response(f"Error: {e}", status=400)
+
+router.register("/receive", receive_endpoint)
